@@ -1,54 +1,64 @@
 const express = require("express");
 const router = express.Router();
-const Contact = require("../models/Contact");
-const sendEmail = require("../utils/sendEmail");
+const mongoose = require("mongoose");
+const nodemailer = require("nodemailer");
 
-// POST contact message
+// Contact Schema
+const contactSchema = new mongoose.Schema({
+  name: String,
+  email: String,
+  message: String,
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
+const Contact = mongoose.model("Contact", contactSchema);
+
+// POST /api/contact
 router.post("/", async (req, res) => {
+  const { name, email, message } = req.body;
+
+  if (!name || !email || !message) {
+    return res.status(400).json({ error: "All fields are required" });
+  }
+
   try {
-    const { name, email, message } = req.body;
+    // Save message to MongoDB
+    const newContact = new Contact({ name, email, message });
+    await newContact.save();
 
-    // 1️⃣ Validate input
-    if (!name || !email || !message) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
+    // Send email to yourself
+    const transporter = nodemailer.createTransport({
+      service: "gmail", // or another email service
+      auth: {
+        user: process.env.EMAIL_USER, // your email
+        pass: process.env.EMAIL_PASS, // app password if Gmail
+      },
+    });
 
-    // 2️⃣ Save to MongoDB
-    const newMessage = new Contact({ name, email, message });
-    await newMessage.save();
-
-    // 3️⃣ Send email to YOU
-    await sendEmail({
+    const mailOptions = {
+      from: email,
       to: process.env.EMAIL_USER,
-      subject: "New Portfolio Contact Message",
-      text: `
-Name: ${name}
-Email: ${email}
+      subject: `New Contact Form Submission from ${name}`,
+      text: `Name: ${name}\nEmail: ${email}\nMessage: ${message}`,
+    };
 
-Message:
-${message}
-      `,
-    });
+    await transporter.sendMail(mailOptions);
 
-    // 4️⃣ Auto-reply to USER
-    await sendEmail({
+    // Send confirmation email to user
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
       to: email,
-      subject: "Thanks for contacting me!",
-      html: `
-        <p>Hi ${name},</p>
-        <p>Thank you for reaching out through my portfolio.</p>
-        <p>I’ve received your message and will get back to you shortly.</p>
-        <br />
-        <p>Best regards,<br/>Jerry</p>
-      `,
+      subject: "Thank you for contacting me!",
+      text: `Hi ${name},\n\nThank you for reaching out. I will get back to you shortly!\n\n– Jeremy`,
     });
 
-    // 5️⃣ Send success response
-    res.status(201).json({ message: "Message sent successfully" });
-
-  } catch (error) {
-    console.error("CONTACT ERROR:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(200).json({ message: "Message sent successfully ✅" });
+  } catch (err) {
+    console.error("Contact error:", err);
+    res.status(500).json({ error: "Something went wrong" });
   }
 });
 
