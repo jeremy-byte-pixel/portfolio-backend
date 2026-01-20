@@ -1,15 +1,17 @@
 {
   "name": "portfolio-backend",
   "version": "1.0.0",
-  "description": "Backend for portfolio contact form",
-  "main": "index.js",
-  "type": "module",
+  "description": "Serverless backend for portfolio",
+  "main": "api/contact.js",
   "scripts": {
-    "dev": "vercel dev",
-    "build": "echo 'No build step required for serverless API'",
-    "start": "vercel dev"
+    "start": "vercel dev",
+    "vercel-build": "echo 'No build step required for serverless API'"
   },
+  "type": "commonjs",
   "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
     "mongoose": "^9.1.3",
     "nodemailer": "^7.0.12"
   }

@@ -1,56 +1,33 @@
-import mongoose from "mongoose";
-import Contact from "../models/Contact";
-import sendEmail from "../utils/sendEmail";
+require("dotenv").config();
+const mongoose = require("mongoose");
+const Contact = require("../models/Contact");
+const sendEmail = require("../utils/sendEmail");
 
-const MONGO_URI = process.env.MONGO_URI;
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB connected ✅"))
+  .catch(err => console.error("MongoDB connection error:", err));
 
-// Connect to MongoDB (serverless-friendly)
-let isConnected = false;
-
-async function connectToDB() {
-  if (isConnected) return;
-  await mongoose.connect(MONGO_URI, { 
-    useNewUrlParser: true, 
-    useUnifiedTopology: true 
-  });
-  isConnected = true;
-}
-
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ message: "Method Not Allowed" });
-  }
-
-  try {
-    await connectToDB();
-
+module.exports = async (req, res) => {
+  if (req.method === "POST") {
     const { name, email, message } = req.body;
 
     if (!name || !email || !message) {
-      return res.status(400).json({ message: "All fields are required." });
+      return res.status(400).json({ error: "All fields are required" });
     }
 
-    const contact = new Contact({ name, email, message });
-    await contact.save();
+    try {
+      const contact = new Contact({ name, email, message });
+      await contact.save();
 
-    // Send thank you email to user
-    await sendEmail({
-      to: email,
-      subject: "Thank you for contacting me",
-      text: `Hi ${name},\n\nThank you for reaching out! I will respond shortly.\n\nBest regards,\nJeremy`
-    });
+      // Send thank-you email
+      await sendEmail(email, "Thank you for contacting me", "I will get back to you shortly!");
 
-    // Optional: send notification email to yourself
-    await sendEmail({
-      to: process.env.EMAIL_USER,
-      subject: "New contact form submission",
-      text: `New message from ${name} (${email}):\n\n${message}`
-    });
-
-    res.status(200).json({ message: "Message sent successfully!" });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error." });
+      res.status(200).json({ success: true, message: "Message sent!" });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Server error" });
+    }
+  } else {
+    res.status(405).json({ error: "Method not allowed" });
   }
-}
+};
