@@ -1,18 +1,20 @@
 import mongoose from "mongoose";
 import Contact from "../models/Contact.js";
-import sendEmail from "../utils/sendEmail.js";
+import { sendEmail } from "../utils/sendEmail.js";
 
-let isConnected = false;
+mongoose.set("strictQuery", true);
 
-async function connectDB() {
-  if (isConnected) return;
-  await mongoose.connect(process.env.MONGO_URI);
-  isConnected = true;
-}
+const MONGO_URI = process.env.MONGO_URI;
+
+const connectDB = async () => {
+  if (mongoose.connection.readyState === 0) {
+    await mongoose.connect(MONGO_URI);
+  }
+};
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ message: "Method Not Allowed" });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
@@ -21,16 +23,20 @@ export default async function handler(req, res) {
     const { name, email, message } = req.body;
 
     if (!name || !email || !message) {
-      return res.status(400).json({ message: "All fields required" });
+      return res.status(400).json({ error: "All fields are required" });
     }
 
-    await Contact.create({ name, email, message });
+    const newContact = await Contact.create({ name, email, message });
 
-    await sendEmail({ name, email, message });
+    await sendEmail({
+      to: process.env.EMAIL_USER,
+      subject: `New contact from ${name}`,
+      text: `Message from ${name} (${email}): ${message}`
+    });
 
-    return res.status(200).json({ message: "Message sent successfully" });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Server error" });
+    res.status(200).json({ message: "Message sent successfully!" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
 }
