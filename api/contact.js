@@ -1,33 +1,37 @@
-require("dotenv").config();
-const mongoose = require("mongoose");
-const Contact = require("../models/Contact");
-const sendEmail = require("../utils/sendEmail");
+import mongoose from "mongoose";
+import Contact from "../models/Contact.js";
+import sendEmail from "../utils/sendEmail.js";
 
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected ✅"))
-  .catch(err => console.error("MongoDB connection error:", err));
+let isConnected = false;
 
-module.exports = async (req, res) => {
-  if (req.method === "POST") {
+async function connectDB() {
+  if (isConnected) return;
+
+  await mongoose.connect(process.env.MONGO_URI);
+  isConnected = true;
+}
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ message: "Method Not Allowed" });
+  }
+
+  try {
+    await connectDB();
+
     const { name, email, message } = req.body;
 
     if (!name || !email || !message) {
-      return res.status(400).json({ error: "All fields are required" });
+      return res.status(400).json({ message: "Missing fields" });
     }
 
-    try {
-      const contact = new Contact({ name, email, message });
-      await contact.save();
+    await Contact.create({ name, email, message });
 
-      // Send thank-you email
-      await sendEmail(email, "Thank you for contacting me", "I will get back to you shortly!");
+    await sendEmail(name, email, message);
 
-      res.status(200).json({ success: true, message: "Message sent!" });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Server error" });
-    }
-  } else {
-    res.status(405).json({ error: "Method not allowed" });
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("API ERROR:", error);
+    return res.status(500).json({ message: "Server error" });
   }
-};
+}
